@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-// TeeWriter is a Writer interface used in TeeReader
+// TeeWriter is a Writer interface used in TeeReader.
 type TeeWriter struct {
 	Expected          int64     // bytes expected
 	ExpectedStrLength int       // length of Expected as a string, used for formatting
@@ -18,6 +18,7 @@ type TeeWriter struct {
 	Hash              hash.Hash // hash of bytes written
 }
 
+// NewTeeWriter creates a new TeeWriter.
 func NewTeeWriter(expected int64, hash hash.Hash) *TeeWriter {
 	return &TeeWriter{
 		Expected:          expected,
@@ -27,7 +28,7 @@ func NewTeeWriter(expected int64, hash hash.Hash) *TeeWriter {
 	}
 }
 
-// Write keeps track of the number of bytes and computes a hash on the fly
+// Write keeps track of the number of bytes and computes a hash on the fly.
 func (tw *TeeWriter) Write(data []byte) (int, error) {
 	// write data to hash
 	tw.Hash.Write(data)
@@ -47,30 +48,36 @@ func (tw *TeeWriter) Write(data []byte) (int, error) {
 	return n, nil
 }
 
+// DownloadFile will download the given file at url and write the file to filepath.
+// After download, the expectedSize and hash will be checked.
+// If filepath exists, it will be overwritten without warning.
 func DownloadFile(url string, filepath string, expectedSize int64, hash hash.Hash) (size int64, hashStr string, err error) {
-
+	// create the file, overwriting any existing file of the same name
 	out, err := os.Create(filepath)
 	if err != nil {
 		return
 	}
 	defer out.Close()
 
+	// get the content at the given URL
 	resp, err := http.Get(url)
 	if err != nil {
 		return
 	}
 	defer resp.Body.Close()
 
-	counter := NewTeeWriter(expectedSize, hash)
-	_, err = io.Copy(out, io.TeeReader(resp.Body, counter))
+	// use a TeeReader to download the file and also show progress and compute hash on the fly
+	teeWriter := NewTeeWriter(expectedSize, hash)
+	_, err = io.Copy(out, io.TeeReader(resp.Body, teeWriter))
 	if err != nil {
 		return
 	}
 
 	fmt.Println()
 
-	size = counter.Written
-	hashStr = fmt.Sprintf("%x", counter.Hash.Sum(nil))
+	// set return values
+	size = teeWriter.Written
+	hashStr = fmt.Sprintf("%x", teeWriter.Hash.Sum(nil))
 
 	return
 }
