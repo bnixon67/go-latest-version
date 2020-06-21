@@ -1,7 +1,6 @@
 package main
 
 import (
-	"crypto/sha256"
 	"fmt"
 	"hash"
 	"io"
@@ -19,12 +18,12 @@ type TeeWriter struct {
 	Hash              hash.Hash // hash of bytes written
 }
 
-func NewTeeWriter(expected int64) *TeeWriter {
+func NewTeeWriter(expected int64, hash hash.Hash) *TeeWriter {
 	return &TeeWriter{
 		Expected:          expected,
 		ExpectedStrLength: len(strconv.FormatInt(expected, 10)),
 		Written:           0,
-		Hash:              sha256.New(),
+		Hash:              hash,
 	}
 }
 
@@ -48,7 +47,7 @@ func (tw *TeeWriter) Write(data []byte) (int, error) {
 	return n, nil
 }
 
-func DownloadFile(url string, filepath string, expectedSize int64) (size int64, hashStr string, err error) {
+func DownloadFile(url string, filepath string, expectedSize int64, hash hash.Hash) (size int64, hashStr string, err error) {
 
 	out, err := os.Create(filepath)
 	if err != nil {
@@ -62,7 +61,7 @@ func DownloadFile(url string, filepath string, expectedSize int64) (size int64, 
 	}
 	defer resp.Body.Close()
 
-	counter := NewTeeWriter(expectedSize)
+	counter := NewTeeWriter(expectedSize, hash)
 	_, err = io.Copy(out, io.TeeReader(resp.Body, counter))
 	if err != nil {
 		return

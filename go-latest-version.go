@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -73,7 +74,7 @@ func main() {
 			} else {
 				// Download latest file
 				size, hashStr, err := DownloadFile(dlURLPrefix+file.Filename,
-					file.Filename, file.Size)
+					file.Filename, file.Size, sha256.New())
 				if err != nil {
 					fmt.Println(err)
 					return
