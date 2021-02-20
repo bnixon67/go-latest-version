@@ -4,7 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"runtime"
 )
@@ -38,7 +38,7 @@ func main() {
 		return
 	}
 	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 
 	// check to make sure we have a json array
 	if body[0] != '[' {
