@@ -114,6 +114,9 @@ func main() {
 				} else {
 					fmt.Println("FAILED")
 				}
+
+				fmt.Println("Run the following command to install:")
+				fmt.Printf("sudo -- sh -c \"rm -rf /usr/local/go && tar -C /usr/local -xzf %s\"\n", file.Filename)
 			}
 		}
 	}
