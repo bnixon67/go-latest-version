@@ -28,19 +28,19 @@ import (
 
 // TeeWriter is a Writer interface used in TeeReader.
 type TeeWriter struct {
-	Expected          int64     // bytes expected
-	ExpectedStrLength int       // length of Expected as a string, used for formatting
-	Written           int64     // bytes written
-	Hash              hash.Hash // hash of bytes written
+	Expected       int64     // bytes expected
+	ExpectedStrLen int       // length of Expected as a string, used for formatting
+	Written        int64     // bytes written
+	Hash           hash.Hash // hash of bytes written
 }
 
 // NewTeeWriter creates a new TeeWriter.
 func NewTeeWriter(expected int64, hash hash.Hash) *TeeWriter {
 	return &TeeWriter{
-		Expected:          expected,
-		ExpectedStrLength: len(strconv.FormatInt(expected, 10)),
-		Written:           0,
-		Hash:              hash,
+		Expected:       expected,
+		ExpectedStrLen: len(strconv.FormatInt(expected, 10)),
+		Written:        0,
+		Hash:           hash,
 	}
 }
 
@@ -58,7 +58,7 @@ func (tw *TeeWriter) Write(data []byte) (int, error) {
 	fmt.Printf(
 		"\r%3.0f%% (%*d of %d) complete",
 		100.0*float64(tw.Written)/float64(tw.Expected),
-		tw.ExpectedStrLength, tw.Written,
+		tw.ExpectedStrLen, tw.Written,
 		tw.Expected)
 
 	return n, nil

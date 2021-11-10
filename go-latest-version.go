@@ -102,9 +102,9 @@ func main() {
 				fmt.Printf("Expected sha256 hash %s\n", file.Sha256)
 				fmt.Printf("Received sha256 hash %s\n", hashStr)
 				if file.Sha256 == hashStr {
-					fmt.Println("OK\n")
+					fmt.Println("OK")
 				} else {
-					fmt.Println("FAILED\n")
+					fmt.Println("FAILED")
 				}
 
 				fmt.Printf("Expected file size %d\n", file.Size)
