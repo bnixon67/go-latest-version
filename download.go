@@ -25,12 +25,12 @@ type ProgressHashWriter struct {
 // NewProgressHashWriter creates a new ProgressHashWriter that
 // expects the specified number of bytes to be written and computes a
 // checksum using the provided hash algorithm.
-func NewProgressHashWriter(expected int64, hash hash.Hash) *ProgressHashWriter {
+func NewProgressHashWriter(expected int64, h hash.Hash) *ProgressHashWriter {
 	return &ProgressHashWriter{
 		Expected:       expected,
 		ExpectedStrLen: len(strconv.FormatInt(expected, 10)),
 		Written:        0,
-		Hash:           hash,
+		Hash:           h,
 	}
 }
 
@@ -63,7 +63,7 @@ var ErrDownloadFailed = errors.New("download failed")
 // The expectedSize is used to display the download progress.
 // The checksum is computed using the provided hash.Hash.
 // If the filepath already exists, it will be overwritten without warning.
-func DownloadFileWithProgressAndChecksum(url, filepath string, expectedSize int64, hash hash.Hash) (size int64, checksum string, err error) {
+func DownloadFileWithProgressAndChecksum(url, filepath string, expectedSize int64, h hash.Hash) (size int64, checksum string, err error) {
 	fmt.Printf("Downloading %q to %q\n", url, filepath)
 
 	// create the file, overwriting any existing file of the same name
@@ -85,7 +85,7 @@ func DownloadFileWithProgressAndChecksum(url, filepath string, expectedSize int6
 	}
 
 	// Use custom Writer to download file, show progress, and compute hash
-	teeWriter := NewProgressHashWriter(expectedSize, hash)
+	teeWriter := NewProgressHashWriter(expectedSize, h)
 
 	_, err = io.Copy(out, io.TeeReader(resp.Body, teeWriter))
 	if err != nil {

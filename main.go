@@ -40,8 +40,8 @@ const (
 )
 
 // getReleaseInfo retrieves the release information from the url.
-func getReleaseInfo(url string) (ReleaseInfo, error) {
-	resp, err := http.Get(url)
+func getReleaseInfo(releaseURL string) (ReleaseInfo, error) {
+	resp, err := http.Get(releaseURL)
 	if err != nil {
 		return nil,
 			fmt.Errorf("getReleaseInfo http.Get failed: %w", err)
@@ -51,7 +51,7 @@ func getReleaseInfo(url string) (ReleaseInfo, error) {
 	if resp.StatusCode != http.StatusOK {
 		return nil,
 			fmt.Errorf("getReleaseInfo http.Get failed: %q %s",
-				url, http.StatusText(resp.StatusCode))
+				releaseURL, http.StatusText(resp.StatusCode))
 	}
 
 	body, err := io.ReadAll(resp.Body)
