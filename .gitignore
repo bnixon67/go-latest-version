@@ -1,2 +1,5 @@
 go-latest-version
 *.tar.gz
+*~
+*.swp
+nohup.out

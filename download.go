@@ -1,42 +1,32 @@
-/*
-Copyright 2021 Bill Nixon
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-
+// Copyright 2023 Bill Nixon
+// Licensed under the Apache License, Version 2.0 (the "License").
+// See the LICENSE file for the specific language governing permissions
+// and limitations under the License.
 package main
 
 import (
+	"errors"
 	"fmt"
 	"hash"
 	"io"
 	"net/http"
 	"os"
 	"strconv"
-	"strings"
 )
 
-// TeeWriter is a Writer interface used in TeeReader.
-type TeeWriter struct {
+// ProgressHashWriter displays process and computes a hash as bytes are written.
+type ProgressHashWriter struct {
 	Expected       int64     // bytes expected
-	ExpectedStrLen int       // length of Expected as a string, used for formatting
+	ExpectedStrLen int       // string length of Expected for formatting
 	Written        int64     // bytes written
 	Hash           hash.Hash // hash of bytes written
 }
 
-// NewTeeWriter creates a new TeeWriter.
-func NewTeeWriter(expected int64, hash hash.Hash) *TeeWriter {
-	return &TeeWriter{
+// NewProgressHashWriter creates a new ProgressHashWriter that
+// expects the specified number of bytes to be written and computes a
+// checksum using the provided hash algorithm.
+func NewProgressHashWriter(expected int64, hash hash.Hash) *ProgressHashWriter {
+	return &ProgressHashWriter{
 		Expected:       expected,
 		ExpectedStrLen: len(strconv.FormatInt(expected, 10)),
 		Written:        0,
@@ -44,19 +34,20 @@ func NewTeeWriter(expected int64, hash hash.Hash) *TeeWriter {
 	}
 }
 
-// Write keeps track of the number of bytes and computes a hash on the fly.
-func (tw *TeeWriter) Write(data []byte) (int, error) {
-	// write data to hash
+// Write displays the progress while counting the bytes written and
+// computing the hash. This function is designed to be used while
+// downloading a file, providing real-time progress updates and allowing
+// verification of the downloaded file's integrity.
+func (tw *ProgressHashWriter) Write(data []byte) (int, error) {
+	// add data to running hash
 	tw.Hash.Write(data)
 
-	// count bytes
+	// update bytes written
 	n := len(data)
 	tw.Written += int64(n)
 
 	// show progress
-	fmt.Printf("\r%s", strings.Repeat(" ", 40))
-	fmt.Printf(
-		"\r%3.0f%% (%*d of %d) complete",
+	fmt.Printf("\r%3.0f%% (%*d of %d) complete",
 		100.0*float64(tw.Written)/float64(tw.Expected),
 		tw.ExpectedStrLen, tw.Written,
 		tw.Expected)
@@ -64,36 +55,46 @@ func (tw *TeeWriter) Write(data []byte) (int, error) {
 	return n, nil
 }
 
-// DownloadFile will download the given file at url and write the file to filepath.
-// After download, the expectedSize and hash will be checked.
-// If filepath exists, it will be overwritten without warning.
-func DownloadFile(url string, filepath string, expectedSize int64, hash hash.Hash) (size int64, hashStr string, err error) {
+var ErrDownloadFailed = errors.New("download failed")
+
+// DownloadFileWithProgressAndChecksum downloads a file from the
+// specified URL, saves it to the given filepath, and returns the size
+// and checksum of the downloaded file for verification.
+// The expectedSize is used to display the download progress.
+// The checksum is computed using the provided hash.Hash.
+// If the filepath already exists, it will be overwritten without warning.
+func DownloadFileWithProgressAndChecksum(url, filepath string, expectedSize int64, hash hash.Hash) (size int64, checksum string, err error) {
+	fmt.Printf("Downloading %q to %q\n", url, filepath)
+
 	// create the file, overwriting any existing file of the same name
 	out, err := os.Create(filepath)
 	if err != nil {
-		return
+		return 0, "", fmt.Errorf("%w: %v", ErrDownloadFailed, err)
 	}
 	defer out.Close()
 
 	// get the content at the given URL
 	resp, err := http.Get(url)
 	if err != nil {
-		return
+		return 0, "", fmt.Errorf("%w: %v", ErrDownloadFailed, err)
 	}
 	defer resp.Body.Close()
 
-	// use a TeeReader to download the file and also show progress and compute hash on the fly
-	teeWriter := NewTeeWriter(expectedSize, hash)
+	if resp.StatusCode != http.StatusOK {
+		return 0, "", fmt.Errorf("%w: %q %s", ErrDownloadFailed, url, http.StatusText(resp.StatusCode))
+	}
+
+	// Use custom Writer to download file, show progress, and compute hash
+	teeWriter := NewProgressHashWriter(expectedSize, hash)
 	_, err = io.Copy(out, io.TeeReader(resp.Body, teeWriter))
 	if err != nil {
-		return
+		return 0, "", fmt.Errorf("%w: %v", ErrDownloadFailed, err)
 	}
 
 	fmt.Println()
 
-	// set return values
 	size = teeWriter.Written
-	hashStr = fmt.Sprintf("%x", teeWriter.Hash.Sum(nil))
+	checksum = fmt.Sprintf("%x", teeWriter.Hash.Sum(nil))
 
-	return
+	return size, checksum, err
 }
