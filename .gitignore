@@ -3,3 +3,5 @@ go-latest-version
 *~
 *.swp
 nohup.out
+*.msi
+*.pkg

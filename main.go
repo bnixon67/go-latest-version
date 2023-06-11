@@ -103,18 +103,14 @@ func downloadAndVerifyFile(file ReleaseFile) error {
 		return err
 	}
 
-	fmt.Println("Compare SHA256 checksum")
-	fmt.Printf("  got  %s\n", checksum)
-	fmt.Printf("  want %s\n", file.SHA256)
 	if file.SHA256 != checksum {
-		return fmt.Errorf("SHA256 checksum mismatch")
+		return fmt.Errorf("SHA256 checksum mismatch: got %v want %v",
+			checksum, file.SHA256)
 	}
 
-	fmt.Println("Compare file size")
-	fmt.Printf("  got  %d\n", size)
-	fmt.Printf("  want %d\n", file.Size)
 	if file.Size != size {
-		return fmt.Errorf("file size mismatch")
+		return fmt.Errorf("file size mismatch: got %v want %v",
+			size, file.Size)
 	}
 
 	return nil
@@ -146,7 +142,7 @@ func main() {
 
 	err = downloadAndVerifyFile(file)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Printf("Download failed: %v\n", err)
 		return
 	}
 

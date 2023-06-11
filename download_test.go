@@ -3,7 +3,6 @@ package main
 import (
 	"crypto/sha256"
 	"errors"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -14,9 +13,9 @@ import (
 func TestDownloadFileWithProgressAndChecksum(t *testing.T) {
 	// mock HTTP response and return named files from testdata directory
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		filePath := filepath.Join("testdata/", r.URL.Path)
+		filePath := filepath.Join("testdata", r.URL.Path)
 
-		data, err := ioutil.ReadFile(filePath)
+		data, err := os.ReadFile(filePath)
 		if err != nil {
 			http.NotFound(w, r)
 			return
