@@ -69,14 +69,14 @@ func DownloadFileWithProgressAndChecksum(url, filepath string, expectedSize int6
 	// create the file, overwriting any existing file of the same name
 	out, err := os.Create(filepath)
 	if err != nil {
-		return 0, "", fmt.Errorf("%w: %v", ErrDownloadFailed, err)
+		return 0, "", fmt.Errorf("%w: %w", ErrDownloadFailed, err)
 	}
 	defer out.Close()
 
 	// get the content at the given URL
 	resp, err := http.Get(url)
 	if err != nil {
-		return 0, "", fmt.Errorf("%w: %v", ErrDownloadFailed, err)
+		return 0, "", fmt.Errorf("%w: %w", ErrDownloadFailed, err)
 	}
 	defer resp.Body.Close()
 
@@ -86,9 +86,10 @@ func DownloadFileWithProgressAndChecksum(url, filepath string, expectedSize int6
 
 	// Use custom Writer to download file, show progress, and compute hash
 	teeWriter := NewProgressHashWriter(expectedSize, hash)
+
 	_, err = io.Copy(out, io.TeeReader(resp.Body, teeWriter))
 	if err != nil {
-		return 0, "", fmt.Errorf("%w: %v", ErrDownloadFailed, err)
+		return 0, "", fmt.Errorf("%w: %w", ErrDownloadFailed, err)
 	}
 
 	fmt.Println()
@@ -96,5 +97,5 @@ func DownloadFileWithProgressAndChecksum(url, filepath string, expectedSize int6
 	size = teeWriter.Written
 	checksum = fmt.Sprintf("%x", teeWriter.Hash.Sum(nil))
 
-	return size, checksum, err
+	return size, checksum, nil
 }

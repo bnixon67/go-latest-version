@@ -61,6 +61,7 @@ func getReleaseInfo(url string) (ReleaseInfo, error) {
 	}
 
 	var releaseInfo ReleaseInfo
+
 	err = json.Unmarshal(body, &releaseInfo)
 	if err != nil {
 		return nil,
@@ -123,12 +124,14 @@ func main() {
 	releaseInfo, err := getReleaseInfo(releaseURL)
 	if err != nil {
 		fmt.Println(err)
+
 		return
 	}
 
 	file, err := findMatchingReleaseFile(releaseInfo)
 	if err != nil {
 		fmt.Println(err)
+
 		return
 	}
 
@@ -137,12 +140,14 @@ func main() {
 
 	if file.Version == runtime.Version() {
 		fmt.Println("Running current version.")
+
 		return
 	}
 
 	err = downloadAndVerifyFile(file)
 	if err != nil {
 		fmt.Printf("Download failed: %v\n", err)
+
 		return
 	}
 

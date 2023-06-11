@@ -18,6 +18,7 @@ func TestDownloadFileWithProgressAndChecksum(t *testing.T) {
 		data, err := os.ReadFile(filePath)
 		if err != nil {
 			http.NotFound(w, r)
+
 			return
 		}
 
@@ -31,6 +32,7 @@ func TestDownloadFileWithProgressAndChecksum(t *testing.T) {
 	if err != nil {
 		t.Fatalf("cannot create temp file: %v", err)
 	}
+
 	tempFileName := tempFile.Name()
 	defer os.Remove(tempFileName)
 
