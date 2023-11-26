@@ -1,20 +1,21 @@
-// Copyright 2023 Bill Nixon
-// Licensed under the Apache License, Version 2.0 (the "License").
-// See the LICENSE file for the specific language governing permissions
-// and limitations under the License.
+// Copyright 2023 Bill Nixon. All rights reserved.
+// Use of this source code is governed by the license found in the LICENSE file.
+
 package main
 
 import (
 	"crypto/sha256"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"runtime"
 )
 
-// ReleaseFile represents a file on the go.dev downloads page.
+// ReleaseFile represents a file available on the go.dev downloads page.
 // See https://pkg.go.dev/golang.org/x/website/internal/dl#File
 type ReleaseFile struct {
 	Filename string `json:"filename"`
@@ -26,7 +27,7 @@ type ReleaseFile struct {
 	Kind     string `json:"kind"`
 }
 
-// ReleaseInfo represents release downloads from golang.org/dl/?mode=json.
+// ReleaseInfo represents a collection of Go releases with associated files.
 // See https://pkg.go.dev/golang.org/x/website/internal/dl#Release
 type ReleaseInfo []struct {
 	Version string        `json:"version"`
@@ -35,29 +36,30 @@ type ReleaseInfo []struct {
 }
 
 const (
-	releaseURL        = "https://golang.org/dl/?mode=json"
-	downloadPrefixURL = "https://golang.org/dl/"
+	downloadPrefixURL = "https://go.dev/dl"
+	releaseURL        = downloadPrefixURL + "/?mode=json"
 )
 
-// getReleaseInfo retrieves the release information from the url.
+// getReleaseInfo gets the latest Go release information from the official URL.
+// It returns a ReleaseInfo object containing details about available releases.
 func getReleaseInfo(releaseURL string) (ReleaseInfo, error) {
 	resp, err := http.Get(releaseURL)
 	if err != nil {
 		return nil,
-			fmt.Errorf("getReleaseInfo http.Get failed: %w", err)
+			fmt.Errorf("failed to get release info: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil,
-			fmt.Errorf("getReleaseInfo http.Get failed: %q %s",
+			fmt.Errorf("failed to get release info: %q %s",
 				releaseURL, http.StatusText(resp.StatusCode))
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil,
-			fmt.Errorf("getReleaseInfo io.ReadAll failed: %w", err)
+			fmt.Errorf("failed to read release info: %w", err)
 	}
 
 	var releaseInfo ReleaseInfo
@@ -65,14 +67,13 @@ func getReleaseInfo(releaseURL string) (ReleaseInfo, error) {
 	err = json.Unmarshal(body, &releaseInfo)
 	if err != nil {
 		return nil,
-			fmt.Errorf("getReleaseInfo UnMarshal failed: %w", err)
+			fmt.Errorf("failed to unmarshal release info: %w", err)
 	}
 
 	return releaseInfo, nil
 }
 
-// findMatchingReleaseFile searches for a release file in the release
-// info that matches the current OS and architecture.
+// findMatchingReleaseFile returns the release file for the current system's OS and architecture.
 func findMatchingReleaseFile(releaseInfo ReleaseInfo) (ReleaseFile, error) {
 	kind := "archive"
 
@@ -81,74 +82,84 @@ func findMatchingReleaseFile(releaseInfo ReleaseInfo) (ReleaseFile, error) {
 		kind = "installer"
 	}
 
-	for _, r := range releaseInfo {
-		for _, file := range r.Files {
+	for _, release := range releaseInfo {
+		for _, file := range release.Files {
 			if file.OS == runtime.GOOS && file.Arch == runtime.GOARCH && file.Kind == kind {
 				return file, nil
 			}
 		}
 	}
 
-	return ReleaseFile{}, fmt.Errorf("no matching file found")
+	return ReleaseFile{}, fmt.Errorf("no matching file found for OS: %s, Arch: %s", runtime.GOOS, runtime.GOARCH)
 }
 
-// downloadAndVerifyFile downloads and verifies the release file.
+// downloadAndVerifyFile downloads a Go release file and verifies its integrity.
+// It checks the SHA256 checksum and file size against the provided metadata.
 func downloadAndVerifyFile(file ReleaseFile) error {
 	fullURL, err := url.JoinPath(downloadPrefixURL, file.Filename)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to join path: %w", err)
 	}
 
 	size, checksum, err := DownloadFileWithProgressAndChecksum(fullURL, file.Filename, file.Size, sha256.New())
 	if err != nil {
-		return err
+		return fmt.Errorf("download failed: %w", err)
+
 	}
 
 	if file.SHA256 != checksum {
-		return fmt.Errorf("SHA256 checksum mismatch: got %v want %v",
+		return fmt.Errorf("checksum incorrect: got %v want %v",
 			checksum, file.SHA256)
 	}
 
 	if file.Size != size {
-		return fmt.Errorf("file size mismatch: got %v want %v",
+		return fmt.Errorf("file size incorrect: got %v want %v",
 			size, file.Size)
 	}
 
 	return nil
 }
 
+const (
+	ExitErrReleaseInfo = 1
+	ExitErrMatchFile   = 2
+	ExitErrDownload    = 3
+)
+
 func main() {
-	fmt.Printf("Running: %s on %s.%s\n",
+	// Define and parse the forceDownload flag.
+	var forceDownload bool
+	flag.BoolVar(&forceDownload, "force", false, "Force download of the latest Go release")
+	flag.Parse()
+
+	fmt.Printf("Running %s on %s/%s\n",
 		runtime.Version(), runtime.GOOS, runtime.GOARCH)
 
 	releaseInfo, err := getReleaseInfo(releaseURL)
 	if err != nil {
-		fmt.Println(err)
-
-		return
+		fmt.Printf("Error gettting release info: %v\n", err)
+		os.Exit(ExitErrReleaseInfo)
 	}
 
 	file, err := findMatchingReleaseFile(releaseInfo)
 	if err != nil {
-		fmt.Println(err)
-
-		return
+		fmt.Printf("Error finding matching release file: %v\n", err)
+		os.Exit(ExitErrMatchFile)
 	}
 
-	fmt.Printf("Latest : %s on %s.%s\n",
+	fmt.Printf("Latest  %s on %s/%s\n",
 		file.Version, file.OS, file.Arch)
 
-	if file.Version == runtime.Version() {
-		fmt.Println("Running current version.")
-
+	// Check if the current version running and if forceDownload is not set.
+	if file.Version == runtime.Version() && !forceDownload {
+		fmt.Println("Running current version. Use -force to override.")
 		return
 	}
 
 	err = downloadAndVerifyFile(file)
 	if err != nil {
 		fmt.Printf("Download failed: %v\n", err)
-
-		return
+		os.Exit(ExitErrDownload)
 	}
 
 	if runtime.GOOS != "windows" && runtime.GOOS != "darwin" {

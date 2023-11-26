@@ -1,7 +1,6 @@
-// Copyright 2023 Bill Nixon
-// Licensed under the Apache License, Version 2.0 (the "License").
-// See the LICENSE file for the specific language governing permissions
-// and limitations under the License.
+// Copyright 2023 Bill Nixon. All rights reserved.
+// Use of this source code is governed by the license found in the LICENSE file.
+
 package main
 
 import (
@@ -14,42 +13,38 @@ import (
 	"strconv"
 )
 
-// ProgressHashWriter displays process and computes a hash as bytes are written.
+// ProgressHashWriter combines hash computation with progress display for written bytes.
 type ProgressHashWriter struct {
-	Expected       int64     // bytes expected
-	ExpectedStrLen int       // string length of Expected for formatting
-	Written        int64     // bytes written
-	Hash           hash.Hash // hash of bytes written
+	Expected    int64     // Total expected bytes.
+	expectedLen int       // Length of the Expected as a string. Precalculate to avoid repeatedly computing in Write().
+	Written     int64     // Total bytes written.
+	Hash        hash.Hash // Hash of written bytes.
 }
 
-// NewProgressHashWriter creates a new ProgressHashWriter that
-// expects the specified number of bytes to be written and computes a
-// checksum using the provided hash algorithm.
+// NewProgressHashWriter initializes a new ProgressHashWriter.
 func NewProgressHashWriter(expected int64, h hash.Hash) *ProgressHashWriter {
 	return &ProgressHashWriter{
-		Expected:       expected,
-		ExpectedStrLen: len(strconv.FormatInt(expected, 10)),
-		Written:        0,
-		Hash:           h,
+		Expected:    expected,
+		expectedLen: len(strconv.FormatInt(expected, 10)),
+		Written:     0,
+		Hash:        h,
 	}
 }
 
-// Write displays the progress while counting the bytes written and
-// computing the hash. This function is designed to be used while
-// downloading a file, providing real-time progress updates and allowing
-// verification of the downloaded file's integrity.
+// Write tracks and displays progress while updating the hash.
+// Use for real-time progress updates and integrity verification during file downloads.
 func (tw *ProgressHashWriter) Write(data []byte) (int, error) {
-	// add data to running hash
+	// Update the hash with new data.
 	tw.Hash.Write(data)
 
-	// update bytes written
+	// Update the total bytes written.
 	n := len(data)
 	tw.Written += int64(n)
 
-	// show progress
+	// Display current progress.
 	fmt.Printf("\r%3.0f%% (%*d of %d) complete",
 		100.0*float64(tw.Written)/float64(tw.Expected),
-		tw.ExpectedStrLen, tw.Written,
+		tw.expectedLen, tw.Written,
 		tw.Expected)
 
 	return n, nil
@@ -57,36 +52,36 @@ func (tw *ProgressHashWriter) Write(data []byte) (int, error) {
 
 var ErrDownloadFailed = errors.New("download failed")
 
-// DownloadFileWithProgressAndChecksum downloads a file from the
-// specified URL, saves it to the given filepath, and returns the size
-// and checksum of the downloaded file for verification.
-// The expectedSize is used to display the download progress.
-// The checksum is computed using the provided hash.Hash.
-// If the filepath already exists, it will be overwritten without warning.
+// DownloadFileWithProgressAndChecksum downloads a file with a progress display and checksum computation.
+// It downloads a file from url, saves it to a specified filepath, and returns size and checksum for verification.
+// If the file already exists at the filepath, it will be overwritten.
 func DownloadFileWithProgressAndChecksum(url, filepath string, expectedSize int64, h hash.Hash) (size int64, checksum string, err error) {
 	fmt.Printf("Downloading %q to %q\n", url, filepath)
 
-	// create the file, overwriting any existing file of the same name
+	// Create or overwrite the file
 	out, err := os.Create(filepath)
 	if err != nil {
 		return 0, "", fmt.Errorf("%w: %w", ErrDownloadFailed, err)
 	}
 	defer out.Close()
 
-	// get the content at the given URL
+	// Get the content from url.
 	resp, err := http.Get(url)
 	if err != nil {
 		return 0, "", fmt.Errorf("%w: %w", ErrDownloadFailed, err)
 	}
 	defer resp.Body.Close()
 
+	// Check for successful response.
 	if resp.StatusCode != http.StatusOK {
-		return 0, "", fmt.Errorf("%w: %q %s", ErrDownloadFailed, url, http.StatusText(resp.StatusCode))
+		return 0, "", fmt.Errorf("%w: %q %s", ErrDownloadFailed,
+			url, http.StatusText(resp.StatusCode))
 	}
 
-	// Use custom Writer to download file, show progress, and compute hash
+	// Initialize the ProgressHashWriter
 	teeWriter := NewProgressHashWriter(expectedSize, h)
 
+	// Download the file, displaying progress and computing hash
 	_, err = io.Copy(out, io.TeeReader(resp.Body, teeWriter))
 	if err != nil {
 		return 0, "", fmt.Errorf("%w: %w", ErrDownloadFailed, err)
@@ -94,6 +89,7 @@ func DownloadFileWithProgressAndChecksum(url, filepath string, expectedSize int6
 
 	fmt.Println()
 
+	// Return the size and checksum of the downloaded file
 	size = teeWriter.Written
 	checksum = fmt.Sprintf("%x", teeWriter.Hash.Sum(nil))
 
