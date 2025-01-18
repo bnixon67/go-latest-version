@@ -41,7 +41,7 @@ func (tw *ProgressHashWriter) Write(data []byte) (int, error) {
 	n := len(data)
 	tw.Written += int64(n)
 
-	// Display current progress.
+	// Display progress
 	fmt.Printf("\r%3.0f%% (%*d of %d) complete",
 		100.0*float64(tw.Written)/float64(tw.Expected),
 		tw.expectedLen, tw.Written,

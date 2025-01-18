@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"runtime"
+	"time"
 )
 
 // ReleaseFile represents a file available on the go.dev downloads page.
@@ -43,7 +44,8 @@ const (
 // getReleaseInfo gets the latest Go release information from the official URL.
 // It returns a ReleaseInfo object containing details about available releases.
 func getReleaseInfo(releaseURL string) (ReleaseInfo, error) {
-	resp, err := http.Get(releaseURL)
+	httpClient := &http.Client{Timeout: 30 * time.Second}
+	resp, err := httpClient.Get(releaseURL)
 	if err != nil {
 		return nil,
 			fmt.Errorf("failed to get release info: %w", err)
@@ -137,7 +139,7 @@ func main() {
 
 	releaseInfo, err := getReleaseInfo(releaseURL)
 	if err != nil {
-		fmt.Printf("Error gettting release info: %v\n", err)
+		fmt.Printf("Error getting release info: %v\n", err)
 		os.Exit(ExitErrReleaseInfo)
 	}
 
