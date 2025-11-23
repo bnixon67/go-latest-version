@@ -1,6 +1,5 @@
-// Copyright 2023 Bill Nixon. All rights reserved.
+// Copyright 2025 Bill Nixon. All rights reserved.
 // Use of this source code is governed by the license found in the LICENSE file.
-
 package main
 
 import (
@@ -37,14 +36,16 @@ type ReleaseInfo []struct {
 }
 
 const (
-	downloadPrefixURL = "https://go.dev/dl"
-	releaseURL        = downloadPrefixURL + "/?mode=json"
+	downloadPrefixURL  = "https://go.dev/dl"
+	releaseURL         = downloadPrefixURL + "/?mode=json"
+	httpClientTimeout  = 30 * time.Second
+	downloadMaxRetries = 3
 )
 
 // getReleaseInfo gets the latest Go release information from the official URL.
 // It returns a ReleaseInfo object containing details about available releases.
 func getReleaseInfo(releaseURL string) (ReleaseInfo, error) {
-	httpClient := &http.Client{Timeout: 30 * time.Second}
+	httpClient := &http.Client{Timeout: httpClientTimeout}
 	resp, err := httpClient.Get(releaseURL)
 	if err != nil {
 		return nil,
@@ -65,7 +66,6 @@ func getReleaseInfo(releaseURL string) (ReleaseInfo, error) {
 	}
 
 	var releaseInfo ReleaseInfo
-
 	err = json.Unmarshal(body, &releaseInfo)
 	if err != nil {
 		return nil,
@@ -78,7 +78,6 @@ func getReleaseInfo(releaseURL string) (ReleaseInfo, error) {
 // findMatchingReleaseFile returns the release file for the current system's OS and architecture.
 func findMatchingReleaseFile(releaseInfo ReleaseInfo) (ReleaseFile, error) {
 	kind := "archive"
-
 	// for windows and darwin, prefer installer over archive
 	if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
 		kind = "installer"
@@ -97,7 +96,29 @@ func findMatchingReleaseFile(releaseInfo ReleaseInfo) (ReleaseFile, error) {
 
 // downloadAndVerifyFile downloads a Go release file and verifies its integrity.
 // It checks the SHA256 checksum and file size against the provided metadata.
-func downloadAndVerifyFile(file ReleaseFile) error {
+// If the file already exists with correct checksum and size, skips download.
+func downloadAndVerifyFile(file ReleaseFile, forceDownload bool) error {
+	// Check if file already exists and verify it
+	if !forceDownload {
+		if fileInfo, err := os.Stat(file.Filename); err == nil {
+			if fileInfo.Size() == file.Size {
+				// Verify checksum of existing file
+				f, err := os.Open(file.Filename)
+				if err == nil {
+					defer f.Close()
+					h := sha256.New()
+					if _, err := io.Copy(h, f); err == nil {
+						existingChecksum := fmt.Sprintf("%x", h.Sum(nil))
+						if existingChecksum == file.SHA256 {
+							fmt.Printf("File %q already exists with correct checksum, skipping download.\n", file.Filename)
+							return nil
+						}
+					}
+				}
+			}
+		}
+	}
+
 	fullURL, err := url.JoinPath(downloadPrefixURL, file.Filename)
 	if err != nil {
 		return fmt.Errorf("failed to join path: %w", err)
@@ -106,7 +127,6 @@ func downloadAndVerifyFile(file ReleaseFile) error {
 	size, checksum, err := DownloadFileWithProgressAndChecksum(fullURL, file.Filename, file.Size, sha256.New())
 	if err != nil {
 		return fmt.Errorf("download failed: %w", err)
-
 	}
 
 	if file.SHA256 != checksum {
@@ -158,7 +178,7 @@ func main() {
 		return
 	}
 
-	err = downloadAndVerifyFile(file)
+	err = downloadAndVerifyFile(file, forceDownload)
 	if err != nil {
 		fmt.Printf("Download failed: %v\n", err)
 		os.Exit(ExitErrDownload)

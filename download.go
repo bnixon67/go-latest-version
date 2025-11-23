@@ -1,6 +1,5 @@
-// Copyright 2023 Bill Nixon. All rights reserved.
+// Copyright 2025 Bill Nixon. All rights reserved.
 // Use of this source code is governed by the license found in the LICENSE file.
-
 package main
 
 import (
@@ -35,7 +34,9 @@ func NewProgressHashWriter(expected int64, h hash.Hash) *ProgressHashWriter {
 // Use for real-time progress updates and integrity verification during file downloads.
 func (tw *ProgressHashWriter) Write(data []byte) (int, error) {
 	// Update the hash with new data.
-	tw.Hash.Write(data)
+	if _, err := tw.Hash.Write(data); err != nil {
+		return 0, err
+	}
 
 	// Update the total bytes written.
 	n := len(data)
@@ -55,15 +56,26 @@ var ErrDownloadFailed = errors.New("download failed")
 // DownloadFileWithProgressAndChecksum downloads a file with a progress display and checksum computation.
 // It downloads a file from url, saves it to a specified filepath, and returns size and checksum for verification.
 // If the file already exists at the filepath, it will be overwritten.
+// On error, any partial download file is automatically cleaned up.
 func DownloadFileWithProgressAndChecksum(url, filepath string, expectedSize int64, h hash.Hash) (size int64, checksum string, err error) {
 	fmt.Printf("Downloading %q to %q\n", url, filepath)
 
-	// Create or overwrite the file
-	out, err := os.Create(filepath)
+	// Use a temporary file for atomic writes
+	tempPath := filepath + ".tmp"
+
+	// Create or overwrite the temporary file
+	out, err := os.Create(tempPath)
 	if err != nil {
 		return 0, "", fmt.Errorf("%w: %w", ErrDownloadFailed, err)
 	}
-	defer out.Close()
+
+	// Ensure cleanup on error
+	defer func() {
+		out.Close()
+		if err != nil {
+			os.Remove(tempPath)
+		}
+	}()
 
 	// Get the content from url.
 	resp, err := http.Get(url)
@@ -88,6 +100,17 @@ func DownloadFileWithProgressAndChecksum(url, filepath string, expectedSize int6
 	}
 
 	fmt.Println()
+
+	// Close the file before renaming
+	if err = out.Close(); err != nil {
+		return 0, "", fmt.Errorf("%w: %w", ErrDownloadFailed, err)
+	}
+
+	// Atomically move temp file to final destination
+	if err = os.Rename(tempPath, filepath); err != nil {
+		os.Remove(tempPath)
+		return 0, "", fmt.Errorf("%w: %w", ErrDownloadFailed, err)
+	}
 
 	// Return the size and checksum of the downloaded file
 	size = teeWriter.Written
