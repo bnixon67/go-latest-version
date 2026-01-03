@@ -83,7 +83,11 @@ func findMatchingReleaseFile(releaseInfo ReleaseInfo) (ReleaseFile, error) {
 		kind = "installer"
 	}
 
+	// Search through all releases, not just the first one
 	for _, release := range releaseInfo {
+		if !release.Stable {
+			continue
+		}
 		for _, file := range release.Files {
 			if file.OS == runtime.GOOS && file.Arch == runtime.GOARCH && file.Kind == kind {
 				return file, nil

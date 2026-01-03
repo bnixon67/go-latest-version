@@ -77,8 +77,9 @@ func DownloadFileWithProgressAndChecksum(url, filepath string, expectedSize int6
 		}
 	}()
 
-	// Get the content from url.
-	resp, err := http.Get(url)
+	// Get the content from url with timeout.
+	httpClient := &http.Client{Timeout: httpClientTimeout}
+	resp, err := httpClient.Get(url)
 	if err != nil {
 		return 0, "", fmt.Errorf("%w: %w", ErrDownloadFailed, err)
 	}
